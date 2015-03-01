@@ -3,7 +3,7 @@ package packager
 package archetypes
 
 import sbt._
-import sbt.Keys.{ target, mainClass, sourceDirectory, streams }
+import sbt.Keys.{ target, mainClass, sourceDirectory, streams, javaOptions, run }
 import SbtNativePackager.{ Debian, Rpm, Universal }
 import packager.Keys.{ packageName }
 import linux.{ LinuxFileMetaData, LinuxPackageMapping, LinuxSymlink, LinuxPlugin }
@@ -46,6 +46,7 @@ object JavaServerAppPackaging extends AutoPlugin {
    * - config directory
    */
   def linuxSettings: Seq[Setting[_]] = Seq(
+    javaOptions in Linux := Nil,
     // === logging directory mapping ===
     linuxPackageMappings <+= (packageName in Linux, defaultLinuxLogsLocation, daemonUser in Linux, daemonGroup in Linux) map {
       (name, logsDir, user, group) => packageTemplateMapping(logsDir + "/" + name)() withUser user withGroup group withPerms "755"
@@ -60,7 +61,7 @@ object JavaServerAppPackaging extends AutoPlugin {
       if (overrideScript.exists) overrideScript.toURI.toURL
       else etcDefaultTemplateSource
     },
-    makeEtcDefault <<= (packageName in Linux, target in Universal, linuxEtcDefaultTemplate, linuxScriptReplacements)
+    makeEtcDefault <<= (packageName in Linux, target in Universal, linuxEtcDefaultTemplate, linuxScriptReplacements, javaOptions in Linux)
       map makeEtcDefaultScript,
     linuxPackageMappings <++= (makeEtcDefault, bashScriptConfigLocation) map { (conf, configLocation) =>
       configLocation.flatMap { path =>
@@ -259,10 +260,26 @@ object JavaServerAppPackaging extends AutoPlugin {
     Some(script)
   }
 
-  protected def makeEtcDefaultScript(name: String, tmpDir: File, source: java.net.URL, replacements: Seq[(String, String)]): Option[File] = {
+  /**
+   * Creates the etc-default file, which will contain the basic configuration
+   * for an app.
+   * 
+   * @param name of the etc-default config file
+   * @param tmpDir to store the resulting file in (e.g. target in Universal)
+   * @param source of etc-default script
+   * @param replacements for placeholders in etc-default script
+   * @param javaOptions that get appended to the etc-default script
+   * 
+   * @return Some(file: File)
+   */
+  protected def makeEtcDefaultScript(name: String, tmpDir: File, source: java.net.URL,
+    replacements: Seq[(String, String)], javaOptions: Seq[String]): Option[File] = {
     val scriptBits = TemplateWriter.generateScript(source, replacements)
     val script = tmpDir / "tmp" / "etc" / "default" / name
     IO.write(script, scriptBits)
+    if (javaOptions.nonEmpty) {
+      IO.writeLines(script, "# java options from build" +: javaOptions, append = true)
+    }
     Some(script)
   }
 

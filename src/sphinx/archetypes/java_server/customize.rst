@@ -18,7 +18,18 @@ As this file is OS dependend, each OS gets section.
 Linux Configuration
 -------------------
 
-Create ``src/templates/etc-default`` with the following template
+You have two options. First, you can specify your options via the ``build.sbt``.
+
+.. code-block :: scala
+
+    javaOptions in Linux ++= Seq(
+        "-J-Xmx64m", "-J-Xms64m", "-Dproperty=true",  
+    )
+
+For the ``-X`` settings you need to add a suffix ``-J`` so the start script will
+recognize these as vm config parameters. 
+
+The other option is to create ``src/templates/etc-default`` with the following template
 
 .. code-block :: bash
 
@@ -59,7 +70,8 @@ Create ``src/templates/etc-default`` with the following template
     # -d -- -d
 
 The file will be installed to ``/etc/default/<normalizedName>`` and read from there
-by the startscript.
+by the startscript. You can use ``#`` for comments and new lines as you like. The
+available are listed in the template or you can display them via ``show linuxScriptReplacements``.
 
 Environment variables
 ~~~~~~~~~~~~~~~~~~~~~
