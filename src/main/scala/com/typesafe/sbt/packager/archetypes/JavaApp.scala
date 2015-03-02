@@ -3,7 +3,7 @@ package packager
 package archetypes
 
 import sbt._
-import sbt.Keys.{ mappings, target, name, mainClass, sourceDirectory }
+import sbt.Keys.{ mappings, target, name, mainClass, sourceDirectory, javaOptions, streams }
 import packager.Keys.{ packageName, executableScriptName }
 import linux.{ LinuxFileMetaData, LinuxPackageMapping }
 import linux.LinuxPlugin.autoImport.{ linuxPackageMappings, defaultLinuxInstallLocation }
@@ -39,13 +39,16 @@ object JavaAppPackaging extends AutoPlugin with JavaAppStartScript {
    */
   val batTemplate = "bat-template"
 
-  object autoImport extends JavaAppKeys
+  object autoImport extends JavaAppKeys {
+    val jvmoptsLocation = "${app_home}/../conf/jvmopts"
+  }
 
   import JavaAppPackaging.autoImport._
 
   override def requires = debian.DebianPlugin && rpm.RpmPlugin && docker.DockerPlugin && windows.WindowsPlugin
 
   override def projectSettings = Seq(
+    javaOptions in Universal := Nil,
     // Here we record the classpath as it's added to the mappings separately, so
     // we can use its order to generate the bash/bat scripts.
     scriptClasspathOrdering := Nil,
@@ -62,6 +65,39 @@ object JavaAppPackaging extends AutoPlugin with JavaAppStartScript {
     scriptClasspath <<= scriptClasspathOrdering map makeRelativeClasspathNames,
     bashScriptExtraDefines := Nil,
     bashScriptConfigLocation <<= bashScriptConfigLocation ?? None,
+
+    // Create a bashConfigLocation if options are set in build.sbt
+    bashScriptConfigLocation <<= (bashScriptConfigLocation, javaOptions in Universal) map {
+      case (None, opts) if opts.nonEmpty => Some(jvmoptsLocation)
+      case (Some(_), opts) if opts.nonEmpty =>
+        sys.error("jvm options are defined via 'bashScriptConfigLocation' file and 'javaOptions in Universal'. Use only one option")
+      case _ => None
+    },
+    mappings in Universal := {
+      val log = streams.value.log
+      val universalMappings = (mappings in Universal).value
+      val dir = (target in Universal).value
+      val configLocation = bashScriptConfigLocation.value
+      val options = (javaOptions in Universal).value
+
+      if (configLocation.isDefined && options.nonEmpty) {
+        val configFile = dir / "tmp" / "conf" / "jvmopts"
+        IO.writeLines(configFile, options)
+        val filteredMappings = universalMappings.filter {
+          case (file, path) => path != jvmoptsLocation
+        }
+        // Warn the user if he tries to specify options
+        if (filteredMappings.size < universalMappings.size) {
+          log.warn("--------!!! JVM Options are defined twice !!!-----------")
+          log.warn("jvmopts are already present in output package. Will be overriden by 'javaOptions in Universal'")
+        }
+        (configFile -> "conf/jvmopts") +: filteredMappings
+      } else {
+        universalMappings
+      }
+    },
+
+    // ---
     bashScriptDefines <<= (Keys.mainClass in Compile, scriptClasspath, bashScriptExtraDefines, bashScriptConfigLocation) map { (mainClass, cp, extras, config) =>
       val hasMain =
         for {

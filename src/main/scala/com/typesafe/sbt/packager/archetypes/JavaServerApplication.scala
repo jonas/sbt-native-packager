@@ -46,7 +46,7 @@ object JavaServerAppPackaging extends AutoPlugin {
    * - config directory
    */
   def linuxSettings: Seq[Setting[_]] = Seq(
-    javaOptions in Linux := Nil,
+    javaOptions in Linux <<= javaOptions in Universal,
     // === logging directory mapping ===
     linuxPackageMappings <+= (packageName in Linux, defaultLinuxLogsLocation, daemonUser in Linux, daemonGroup in Linux) map {
       (name, logsDir, user, group) => packageTemplateMapping(logsDir + "/" + name)() withUser user withGroup group withPerms "755"
