@@ -187,7 +187,7 @@ process_args () {
 
     -no-version-check) no_version_check=1 && shift ;;
 
-           -mem) require_arg integer "$1" "$2" && app_mem="$2" && shift 2 ;;
+           -mem) echo "!! WARNING !! -mem option is ignored. Please use -J-Xmx and -J-Xms" && shift 2 ;;
      -jvm-debug) require_arg port "$1" "$2" && addDebugger $2 && shift 2 ;;
 
           -main) custom_mainclass="$2" && shift 2 ;;
@@ -300,7 +300,6 @@ Usage: $script_name [options]
   -v | -verbose      this runner is chattier
   -d | -debug        set sbt log level to debug
   -no-version-check  Don't run the java version check.
-  -mem <integer>     set memory options in MB (default: $sbt_mem, which is $(get_mem_opts $sbt_mem))
   -main <classname>  Define a custom main class
   -jvm-debug <port>  Turn on JVM debugging, open at the given port.
 
